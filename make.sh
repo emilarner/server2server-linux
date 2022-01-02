@@ -1,0 +1,1 @@
+gcc -lpthread -o server2server *.c
