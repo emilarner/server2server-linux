@@ -1,5 +1,16 @@
 #include "server2server.h"
 
+void alog_print(FILE *stream, const char *msg)
+{
+    char time_format[32];
+
+    time_t current;
+    time(&current);
+    strftime(time_format, sizeof(time_format), TIME_FORMAT, localtime(&current));
+
+    fprintf(stream, "[%s]: %s\n", time_format, msg);
+}
+
 Server2Server *init_server(char *remote_addr, int remote_port, int control_port, int local_port,
                             enum Modes mode)
 {
@@ -28,7 +39,7 @@ Server2Server *init_server(char *remote_addr, int remote_port, int control_port,
         return NULL; 
     }
 
-    /* This looks weird, but it is necessary to cast char** to struct in_addr* and then */
+    /* This looks weird, but it is necessary to cast char* to struct in_addr* and then */
     /* dereference it. It is just a quirk about how gethostbyname() works. */
     /* gethostbyname() is deprecated, where getaddrinfo() is now preferred. */
 
@@ -52,12 +63,14 @@ int make_connection(struct in_addr addr, uint16_t port)
     saddr.sin_addr = addr;
     saddr.sin_port = port;
 
-    /* Make a connection to the address/port. */
+    /* Make a connection to the address/port. Report an error if it occurs. */
     if (connect(sockfd, (struct sockaddr*) &saddr, (socklen_t) sizeof(saddr)) < 0)
     {
-        fprintf(stderr, "%s:%d", inet_ntoa(saddr.sin_addr), ntohs(saddr.sin_port));
-        perror(" failed on connect()");
-        return -1;
+        elog_print("Error while making TCP connection");
+        fprintf(stderr, "   ->Address: %s:%d    Error: %s\n", inet_ntoa(saddr.sin_addr), 
+                                                              ntohs(saddr.sin_port), strerror(errno));
+
+        return -1; 
     }
 
     return sockfd;
@@ -66,8 +79,6 @@ int make_connection(struct in_addr addr, uint16_t port)
 int make_udp_connection(in_addr_t eaddr, uint16_t port, struct UDPInfo *mut)
 {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-    /* DGRAMS (datagrams) are connectionless. */ 
 
     struct sockaddr_in addr;
 
@@ -78,6 +89,16 @@ int make_udp_connection(in_addr_t eaddr, uint16_t port, struct UDPInfo *mut)
     mut->addr = addr;
     mut->fd = fd;
     mut->len = sizeof(struct sockaddr_in);
+
+    /* Make a UDP connection to a particular server; additionally, report an error if it occurs. */ 
+    if (connect(fd, (struct sockaddr*) &addr, (socklen_t) sizeof(addr)) < 0)
+    {
+        elog_print("Error while making UDP connection");
+        fprintf(stderr, "   ->Address: %s:%d    Error: %s\n", inet_ntoa(addr.sin_addr), 
+                                                ntohs(addr.sin_port), strerror(errno));
+
+        return -1; 
+    }
 
     return fd; 
 }
@@ -240,6 +261,46 @@ void *glue(void *srv)
     }
 }
 
+void *udp_glue(void *srv)
+{
+    Server2Server *s = (Server2Server*) srv;
+
+    
+}
+
+void *udp_control(Server2Server *s)
+{
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in control;
+
+    control.sin_addr = s->raddr;
+    control.sin_port = s->cport;
+    control.sin_family = AF_INET;
+
+    sendto(sockfd, "Hi!", sizeof("Hi!"), 0, (struct sockaddr*) &control, sizeof(control));
+
+    while (true)
+    {
+        struct sockaddr_in whom;
+        socklen_t whom_len = sizeof(struct sockaddr_in);
+        char message[256];
+        int message_len = 0;
+
+        if ((message_len = recvfrom(sockfd, message, sizeof(message), 0, 
+                    (struct sockaddr*) &whom, &whom_len)) == -1)
+        {
+            fprintf(stderr, "Error receiving datagrams: %s\n", strerror(errno));
+            return NULL;
+        }
+
+        if (!memcmp(message, "CONNECT", sizeof("CONNECT") - 1))
+        {
+            pthread_t tmp;
+            pthread_create(&tmp, NULL, udp_glue, (void*) s);
+        }
+    }
+}
+
 void *control(Server2Server *s)
 {
     while (true)
@@ -248,7 +309,7 @@ void *control(Server2Server *s)
 
         if (fd == -1)
         {
-            perror("connnection to control server failed");
+            perror("Connection to control server failed");
             control_again();
         }
 
@@ -261,8 +322,9 @@ void *control(Server2Server *s)
 
             if (len <= 0)
             {
-                perror("control connection died or suffered an error");
-                control_again();
+                perror("Control connection died or suffered an error");
+                usleep(CONTROL_SLEEP_MS);
+                break;
             }
 
             /* Someone has connected! */ 

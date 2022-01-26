@@ -10,9 +10,12 @@
 #define SELECT_TIMEOUT_SEC 900
 
 /* Number of file descriptors select() will scan for. Note: this cannot go above 1024 */
-/* Also, the more select() will scan for, the longer it will take! */ 
+/* Also: the more select() will scan for, the longer it will take! */ 
 #define SELECT_FDS 256
 
+
+/* The strftime() format for the log printing. */
+#define TIME_FORMAT "%m/%d/%y %H:%M"
 
 /* Warning. */
 #if SELECT_FDS >= FD_SETSIZE

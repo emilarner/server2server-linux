@@ -57,6 +57,11 @@ struct Server2Server
 
 typedef struct Server2Server Server2Server;
 
+void alog_print(FILE *stream, const char *msg);
+
+#define log_print(x) alog_print(stdout, x);
+#define elog_print(x) alog_print(stderr, x);
+
 Server2Server *init_server(char *remote_addr, int remote_port, int control_port, int local_port,
                             enum Modes mode);
 
@@ -66,7 +71,10 @@ int make_connection(struct in_addr addr, uint16_t port);
 int make_udp_connection(in_addr_t eaddr, uint16_t port, struct UDPInfo *mut);
 
 void *control(Server2Server *s);
+void *udp_control(Server2Server *s);
+
 void *glue(void *srv);
+void *udp_glue(void *srv);
 
 bool recvallsendall(int from, int to); 
 bool udp_recvallsendall(struct UDPInfo *from, struct UDPInfo *to);
