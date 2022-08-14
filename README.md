@@ -1,4 +1,4 @@
-# server2server-linux
+# server2server-linux [DEPRECATED]
 The program that connects to firehop, so that you can hop over firewalls, on Linux. *server2server* connects two servers together: the server that is serving a service which you want to reverse and the *firehop* server on the accessible end. *firehop* is divided up into two programs so that the complexities of the programs are reduced, adhering to the UNIX philosophy of "one program for one task." 
 
 A lot about *firehop* is explained on the respective *firehop* repository, so if you wish to know more in regards to the system of programs as a whole, you should visit the repository [here](https://github.com/emilarner/firehop-linux).
